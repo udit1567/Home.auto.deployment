@@ -3,9 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 import os
 from flask_cors import CORS
 
-# Add this line in your Flask app setup
-
-# Initialize database
 db = SQLAlchemy()
 
 def create_app():
