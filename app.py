@@ -1,30 +1,20 @@
+import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
-import os
 from flask_cors import CORS
 
-db = SQLAlchemy()
-
-def create_app():
-    app = Flask(__name__)
-    app.debug = True
-    app.secret_key = "secret_key"
-    app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///hsp.sqlite3"
-    db.init_app(app)
-    app.app_context().push()
-
-    return app
-
-app = create_app()
+# Initialize Flask app and database
+app = Flask(__name__, static_folder="frontend", static_url_path="")
+app.debug = True
+app.secret_key = "secret_key"
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///hsp.sqlite3"
+db = SQLAlchemy(app)
 CORS(app)
 
-# Import models
+# Models
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-
-    def __repr__(self):
-        return f"<Device {self.name}>"
 
 class Data(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -33,24 +23,20 @@ class Data(db.Model):
     humidity = db.Column(db.Float, nullable=False)
     timestamp = db.Column(db.DateTime, default=db.func.now())
 
-    def __repr__(self):
-        return f"<Data Device:{self.device_id} Temp:{self.temperature} Hum:{self.humidity}>"
-
-# API key for security
+# API key
 API_KEY = "5588"
 
-@app.route("/")
-def index():
+# Serve React build files
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_react_app(path):
+    if path and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
 
-# Example API route
-@app.route("/api/some-data")
-def some_data():
-    return {"message": "Hello from Flask!"}
-
+# API routes
 @app.route('/register_device', methods=['GET'])
 def register_device():
-    """Endpoint to register a new device using URL parameters."""
     api_key = request.args.get('API-Key')
     if api_key != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
@@ -66,7 +52,6 @@ def register_device():
 
 @app.route('/update_data', methods=['GET'])
 def update_data():
-    """Endpoint to update temperature and humidity data for a device using its name."""
     api_key = request.args.get('API-Key')
     if api_key != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
@@ -84,18 +69,14 @@ def update_data():
     except ValueError:
         return jsonify({"error": "Invalid data format"}), 400
 
-    # Find the device by name
     device = Device.query.filter_by(name=device_name).first()
     if not device:
         return jsonify({"error": "Device not found"}), 404
 
-    # Insert new data for the found device
     new_data = Data(device_id=device.id, temperature=temperature, humidity=humidity)
     db.session.add(new_data)
     db.session.commit()
-
     return jsonify({"message": f"Data updated successfully for device {device.name}!"})
-
 
 @app.route('/get_data', methods=['GET'])
 def get_data():
